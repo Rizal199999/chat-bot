@@ -1,6 +1,6 @@
 const express = require('express');
-const app     = express();
-const PORT    = 3000;
+const app = express();
+const PORT = 3000;
 
 const {
   default: makeWASocket,
@@ -11,12 +11,12 @@ const {
 const { Boom } = require('@hapi/boom');
 const path = require('path');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode'); // <-- Tambah ini untuk generate QR image
 const messageHandler = require('./handlers/messageHandler');
-const { startQRServer, setQR } = require('./qrServer');
+const { startQRServer, setQR, getQR } = require('./qrServer'); // <-- Tambah getQR
 const { handleCheckout } = require('./handlers/checkoutHandler');
 
-let sock; // <-- simpan instance WA socket global
+let sock; // Simpan instance WA socket global
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -42,8 +42,7 @@ async function connectToWhatsApp() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      qrcode.generate(qr, { small: true });
-      setQR(qr);
+      setQR(qr); // Simpan QR string
     }
 
     if (connection === 'close') {
@@ -52,6 +51,7 @@ async function connectToWhatsApp() {
       if (shouldReconnect) connectToWhatsApp();
     } else if (connection === 'open') {
       console.log('🟢 Terhubung ke WhatsApp!');
+      setQR(null); // Hapus QR setelah terkoneksi
     }
   });
 
@@ -87,6 +87,34 @@ app.get('/send-message', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false });
+  }
+});
+
+// ✅ Endpoint baru untuk tampilkan QR di browser
+app.get('/qr', async (req, res) => {
+  const qr = getQR();
+  if (!qr) {
+    return res.send('<h1>Sudah terkoneksi ke WhatsApp atau QR belum tersedia. Refresh halaman ini jika perlu.</h1>');
+  }
+
+  try {
+    const qrImageUrl = await QRCode.toDataURL(qr); // Generate base64 image
+    res.send(`
+      <html>
+        <head>
+          <title>Scan QR WhatsApp</title>
+          <meta http-equiv="refresh" content="10"> <!-- Auto-refresh setiap 10 detik -->
+        </head>
+        <body>
+          <h1>Scan QR ini untuk koneksi WhatsApp</h1>
+          <img src="${qrImageUrl}" alt="QR Code">
+          <p>Refresh halaman jika QR tidak muncul atau expired.</p>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error('Error generate QR:', err);
+    res.status(500).send('<h1>Error generate QR</h1>');
   }
 });
 
