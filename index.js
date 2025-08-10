@@ -26,7 +26,7 @@ app.use((req, res, next) => {
 });
 
 async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState(path.resolve('./session'));
+  const { state, saveCreds } = await useMultiFileAuthState(path.join('/tmp', 'session'));
   const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
